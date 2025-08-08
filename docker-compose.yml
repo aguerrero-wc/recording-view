@@ -1,0 +1,29 @@
+# docker-compose.yml
+
+services:
+  audio-recorder:
+    build: .
+    container_name: audio-recorder-app
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+    
+  # Opcional: Para desarrollo con hot reload
+  audio-recorder-dev:
+    build:
+      context: .
+      target: development-dependencies-env
+    container_name: audio-recorder-dev
+    ports:
+      - "5173:5173"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+    command: npm run dev
+    restart: unless-stopped
+    profiles:
+      - dev
