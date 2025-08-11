@@ -1,15 +1,17 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Pause, Play, X, Info, Smartphone } from 'lucide-react';
+import { InfoIcon, Smartphone, X } from 'lucide-react';
+import AudioVisualizer from './AudioVisualizer';
+import RecordingControls from './RecordingControls';
 
 const AudioRecorder = () => {
-  const [recordingState, setRecordingState] = useState('idle'); // idle, recording, paused, stopped, uploading
+  const [recordingState, setRecordingState] = useState('idle');
   const [audioBlob, setAudioBlob] = useState(null);
   const [audioUrl, setAudioUrl] = useState(null);
   const [duration, setDuration] = useState(0);
-  const [audioData, setAudioData] = useState(new Array(40).fill(0));
   const [error, setError] = useState(null);
   const [showSystemInfo, setShowSystemInfo] = useState(false);
   const [logs, setLogs] = useState([]);
+  const [isClient, setIsClient] = useState(false);
   
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -17,14 +19,41 @@ const AudioRecorder = () => {
   const timerRef = useRef(null);
   const audioContextRef = useRef(null);
   const analyserRef = useRef(null);
-  const animationRef = useRef(null);
 
-  // Sistema de detección de dispositivo
+  // Detectar si estamos en el cliente
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  // Sistema de detección de dispositivo (solo en cliente)
   const getDeviceInfo = () => {
+    if (!isClient || typeof navigator === 'undefined') {
+      return {
+        deviceType: 'Unknown',
+        os: 'Unknown',
+        browser: 'Unknown',
+        isMobile: false,
+        isIOS: false,
+        isAndroid: false,
+        userAgent: 'Unknown',
+        screen: { width: 0, height: 0, pixelRatio: 1 },
+        viewport: { width: 0, height: 0 },
+        capabilities: {
+          mediaDevices: false,
+          getUserMedia: false,
+          audioContext: false,
+          mediaRecorder: false
+        },
+        platform: 'Unknown',
+        language: 'Unknown',
+        cookieEnabled: false,
+        onLine: false
+      };
+    }
+
     const ua = navigator.userAgent;
-    console.log('User Agent completo:', ua); // Para debugging
+    console.log('User Agent completo:', ua);
     
-    // Detección más robusta
     const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     const isAndroid = /Android/.test(ua);
     const isWindows = /Windows|Win32|Win64/.test(ua);
@@ -35,9 +64,6 @@ const AudioRecorder = () => {
     let deviceType = 'Desktop';
     let os = 'Unknown';
     
-    console.log('Flags de detección:', { isIOS, isAndroid, isWindows, isMac, isLinux });
-    
-    // Detección de iOS (incluyendo iPad que se reporta como macOS en nuevos Safari)
     if (isIOS) {
       deviceType = 'Mobile';
       if (/iPad/.test(ua)) {
@@ -47,28 +73,22 @@ const AudioRecorder = () => {
         os = 'iOS';
       }
       
-      // Múltiples patrones para detectar versión de iOS
       let version = ua.match(/(?:iPhone OS|CPU OS|OS) (\d+)[_.](\d+)(?:[_.](\d+))?/);
       if (!version) version = ua.match(/Version\/(\d+)\.(\d+)/);
-      
-      console.log('Versión iOS encontrada:', version);
       
       if (version) {
         os += ` ${version[1]}.${version[2]}`;
         if (version[3]) os += `.${version[3]}`;
       }
     } 
-    // Detección de Android
     else if (isAndroid) {
       deviceType = 'Mobile';
       if (/Tablet|Tab/.test(ua)) deviceType = 'Tablet';
       
       os = 'Android';
       const version = ua.match(/Android (\d+(?:\.\d+)?)/);
-      console.log('Versión Android encontrada:', version);
       if (version) os += ` ${version[1]}`;
     } 
-    // Detección de Windows
     else if (isWindows) {
       os = 'Windows';
       if (/Windows NT 10\.0/.test(ua)) {
@@ -83,13 +103,10 @@ const AudioRecorder = () => {
         const version = ua.match(/Windows NT (\d+\.\d+)/);
         if (version) os += ` NT ${version[1]}`;
       }
-      console.log('Windows detectado:', os);
     } 
-    // Detección de macOS
     else if (isMac) {
       os = 'macOS';
       const version = ua.match(/Mac OS X (\d+)[_.](\d+)/);
-      console.log('macOS detectado, versión:', version);
       if (version) {
         const major = parseInt(version[1]);
         const minor = parseInt(version[2]);
@@ -103,18 +120,14 @@ const AudioRecorder = () => {
         }
       }
     } 
-    // Detección de Linux
     else if (isLinux) {
       os = 'Linux';
       if (/Ubuntu/.test(ua)) os += ' (Ubuntu)';
       else if (/Debian/.test(ua)) os += ' (Debian)';
       else if (/Fedora/.test(ua)) os += ' (Fedora)';
-      console.log('Linux detectado:', os);
     }
 
-    console.log('OS final detectado:', os);
     const browser = getBrowserInfo();
-    console.log('Browser detectado:', browser);
     
     const deviceInfo = {
       deviceType,
@@ -145,14 +158,16 @@ const AudioRecorder = () => {
       onLine: navigator.onLine
     };
     
-    console.log('Device info completo:', deviceInfo);
     return deviceInfo;
   };
 
   const getBrowserInfo = () => {
+    if (!isClient || typeof navigator === 'undefined') {
+      return 'Unknown Browser';
+    }
+
     const ua = navigator.userAgent;
     
-    // Detección más precisa de navegadores
     if (/CriOS\//.test(ua)) {
       const version = ua.match(/CriOS\/(\d+)/);
       return `Chrome iOS ${version ? version[1] : 'Unknown'}`;
@@ -183,17 +198,18 @@ const AudioRecorder = () => {
       return 'UC Browser';
     }
     
-    console.log('Browser no detectado para UA:', ua);
-    return `Unknown Browser`;
+    return 'Unknown Browser';
   };
 
   // Sistema de logs
   const addLog = (level, message, data = null) => {
+    if (!isClient) return;
+    
     const deviceInfo = getDeviceInfo();
     const timestamp = new Date().toISOString();
     const logEntry = {
       timestamp,
-      level, // 'info', 'error', 'warn', 'success'
+      level,
       message,
       data,
       device: deviceInfo.os,
@@ -201,17 +217,14 @@ const AudioRecorder = () => {
       sessionId: sessionStorage.getItem('sessionId') || 'unknown'
     };
     
-    setLogs(prev => [logEntry, ...prev.slice(0, 49)]); // Mantener máximo 50 logs
-    
-    // También log a consola para debugging
+    setLogs(prev => [logEntry, ...prev.slice(0, 49)]);
     console.log(`[${level.toUpperCase()}] ${message}`, data || '');
-    
-    // Aquí podrías enviar a tu servidor de analytics
-    // sendToAnalytics(logEntry);
   };
 
   // Generar session ID único
   useEffect(() => {
+    if (!isClient) return;
+    
     if (!sessionStorage.getItem('sessionId')) {
       sessionStorage.setItem('sessionId', `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
     }
@@ -222,40 +235,7 @@ const AudioRecorder = () => {
       url: window.location.href,
       timestamp: new Date().toISOString()
     });
-  }, []);
-
-  const getSystemInfo = () => {
-    const deviceInfo = getDeviceInfo();
-    
-    return {
-      session: sessionStorage.getItem('sessionId'),
-      device: deviceInfo,
-      recording: {
-        state: recordingState,
-        duration: duration,
-        hasAudioBlob: !!audioBlob,
-        mimeType: mediaRecorderRef.current?.mimeType || 'N/A'
-      },
-      audio: {
-        supportedFormats: [
-          'audio/wav',
-          'audio/webm',
-          'audio/webm;codecs=opus',
-          'audio/mp4'
-        ].filter(format => MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(format)),
-        context: audioContextRef.current ? {
-          state: audioContextRef.current.state,
-          sampleRate: audioContextRef.current.sampleRate
-        } : 'No disponible'
-      },
-      permissions: {
-        https: location.protocol === 'https:',
-        localhost: ['localhost', '127.0.0.1'].includes(location.hostname)
-      },
-      errors: logs.filter(log => log.level === 'error').length,
-      totalLogs: logs.length
-    };
-  };
+  }, [isClient]);
 
   // Efecto de limpieza
   useEffect(() => {
@@ -266,59 +246,19 @@ const AudioRecorder = () => {
       if (timerRef.current) {
         clearInterval(timerRef.current);
       }
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
       if (audioContextRef.current) {
         audioContextRef.current.close();
       }
     };
   }, []);
 
-  // Efecto para forzar animación de barras cuando está grabando
-  useEffect(() => {
-    let intervalId;
-    
-    if (recordingState === 'recording') {
-      let frameCount = 0;
-      
-      intervalId = setInterval(() => {
-        frameCount++;
-        const newAudioData = [];
-        
-        for (let i = 0; i < 40; i++) {
-          // Ondas que realmente se ven moverse
-          const wave1 = Math.sin((frameCount * 0.2) + (i * 0.4)) * 40;
-          const wave2 = Math.sin((frameCount * 0.1) + (i * 0.2)) * 20; 
-          const spike = Math.random() > 0.95 ? Math.random() * 50 : 0;
-          
-          // Altura entre 30 y 100 pixels
-          const height = Math.max(30, Math.min(100, 60 + wave1 + wave2 + spike));
-          newAudioData.push(height);
-        }
-        
-        setAudioData(newAudioData);
-      }, 100); // Cada 100ms
-      
-      addLog('info', 'Animación forzada iniciada');
-    } else {
-      // Resetear a barras pequeñas cuando no está grabando
-      setAudioData(new Array(40).fill(10));
-    }
-    
-    return () => {
-      if (intervalId) {
-        clearInterval(intervalId);
-      }
-    };
-  }, [recordingState]); // Se ejecuta cada vez que cambia el estado de grabación
-
   const startRecording = async () => {
+    if (!isClient) return;
+    
     try {
       setError(null);
       addLog('info', 'Iniciando grabación');
       
-      // Validar soporte de la API
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         const errorMsg = 'Tu navegador no soporta grabación de audio o necesitas HTTPS';
         addLog('error', 'API no soportada', { mediaDevices: !!navigator.mediaDevices });
@@ -326,7 +266,6 @@ const AudioRecorder = () => {
         return;
       }
 
-      // Validar contexto seguro
       if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
         const errorMsg = 'La grabación de audio requiere HTTPS para funcionar correctamente';
         addLog('error', 'Contexto inseguro', { protocol: location.protocol, hostname: location.hostname });
@@ -334,7 +273,6 @@ const AudioRecorder = () => {
         return;
       }
       
-      // Configuración más simple para iOS Safari
       const deviceInfo = getDeviceInfo();
       const isIOS = deviceInfo.isIOS;
       
@@ -349,7 +287,7 @@ const AudioRecorder = () => {
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
-          sampleRate: 44100, // Más compatible con iOS
+          sampleRate: 44100,
         }
       } : {
         audio: {
@@ -371,49 +309,27 @@ const AudioRecorder = () => {
 
       streamRef.current = stream;
       
-      // Setup audio visualization con verificación iOS
       if (!isIOS) {
         try {
           audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
           analyserRef.current = audioContextRef.current.createAnalyser();
           const source = audioContextRef.current.createMediaStreamSource(stream);
           source.connect(analyserRef.current);
-          
           analyserRef.current.fftSize = 256;
-          const bufferLength = analyserRef.current.frequencyBinCount;
-          const dataArray = new Uint8Array(bufferLength);
-
-          const updateAudioData = () => {
-            analyserRef.current.getByteFrequencyData(dataArray);
-            const newAudioData = [];
-            for (let i = 0; i < 40; i++) {
-              const index = Math.floor((i / 40) * bufferLength);
-              newAudioData.push(dataArray[index] || 0);
-            }
-            setAudioData(newAudioData);
-            
-            if (recordingState === 'recording') {
-              animationRef.current = requestAnimationFrame(updateAudioData);
-            }
-          };
-          updateAudioData();
         } catch (audioContextError) {
           console.warn('AudioContext no disponible, continuando sin visualización:', audioContextError);
         }
       }
 
-      // MediaRecorder con mejor compatibilidad iOS
       let options = {};
       
       if (isIOS) {
-        // iOS Safari prefiere estos formatos
         if (MediaRecorder.isTypeSupported('audio/mp4')) {
           options = { mimeType: 'audio/mp4' };
         } else if (MediaRecorder.isTypeSupported('audio/webm')) {
           options = { mimeType: 'audio/webm' };
         }
       } else {
-        // Android/Desktop - mejor calidad
         if (MediaRecorder.isTypeSupported('audio/wav')) {
           options = { mimeType: 'audio/wav', bitsPerSecond: 128000 };
         } else if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
@@ -439,7 +355,7 @@ const AudioRecorder = () => {
         setRecordingState('stopped');
       };
 
-      mediaRecorderRef.current.start(isIOS ? 1000 : 100); // iOS prefiere chunks más grandes
+      mediaRecorderRef.current.start(isIOS ? 1000 : 100);
       setRecordingState('recording');
       setDuration(0);
 
@@ -450,7 +366,6 @@ const AudioRecorder = () => {
     } catch (err) {
       console.error('Error detallado:', err);
       
-      // Mensajes de error específicos para iOS
       if (err.name === 'NotAllowedError') {
         setError('Acceso al micrófono denegado. Ve a Configuración > Safari > Micrófono y permite el acceso.');
       } else if (err.name === 'NotFoundError') {
@@ -460,7 +375,6 @@ const AudioRecorder = () => {
       } else if (err.name === 'OverconstrainedError') {
         setError('Configuración de audio no compatible. Intentando configuración básica...');
         
-        // Fallback con configuración mínima
         try {
           const basicStream = await navigator.mediaDevices.getUserMedia({ audio: true });
           streamRef.current = basicStream;
@@ -533,10 +447,6 @@ const AudioRecorder = () => {
       if (timerRef.current) {
         clearInterval(timerRef.current);
       }
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
-      setAudioData(new Array(40).fill(0));
       addLog('info', 'Grabación detenida', { finalDuration: duration });
     }
   };
@@ -547,7 +457,6 @@ const AudioRecorder = () => {
     setAudioUrl(null);
     setDuration(0);
     setError(null);
-    setAudioData(new Array(40).fill(0));
     audioChunksRef.current = [];
     addLog('info', 'Grabador reiniciado');
   };
@@ -580,32 +489,30 @@ const AudioRecorder = () => {
     }
   };
 
-  const formatDuration = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
   const getMainContent = () => {
     if (recordingState === 'idle') {
       return (
-        <div className="text-center space-y-8">
-          <p className="text-gray-600 text-lg leading-relaxed px-4">
-            Prepárate para grabar tu mensaje con calidad profesional. 
-            Presiona el botón central cuando estés listo.
-          </p>
+        <div className="text-center space-y-6">
+          <div className="space-y-4">
+            <h2 className="text-2xl font-bold text-gray-800">Listo para grabar</h2>
+            <p className="text-gray-600 text-lg leading-relaxed px-4 max-w-md">
+              Prepárate para capturar tu mensaje. 
+              Presiona el micrófono cuando estés listo.
+            </p>
+          </div>
         </div>
       );
     }
 
     if (recordingState === 'uploading') {
       return (
-        <div className="text-center space-y-8">
-          <p className="text-gray-600 text-lg">
-            Procesando tu audio...
-          </p>
-          <div className="flex justify-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
+        <div className="text-center space-y-6">
+          <div className="w-16 h-16 mx-auto">
+            <div className="animate-spin rounded-full h-16 w-16 border-4 border-orange-200 border-t-orange-500"></div>
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-xl font-semibold text-gray-800">Procesando audio</h2>
+            <p className="text-gray-600">Esto tomará unos segundos...</p>
           </div>
         </div>
       );
@@ -613,10 +520,13 @@ const AudioRecorder = () => {
 
     if (recordingState === 'stopped') {
       return (
-        <div className="text-center space-y-8">
-          <p className="text-gray-600 text-lg">
-            Grabación completada. Puedes reproducir, guardar o grabar nuevamente.
-          </p>
+        <div className="text-center space-y-6">
+          <div className="space-y-4">
+            <h2 className="text-2xl font-bold text-gray-800">¡Grabación completada!</h2>
+            <p className="text-gray-600 text-lg">
+              Tu audio está listo. Puedes reproducirlo o procesarlo ahora.
+            </p>
+          </div>
           <div className="flex justify-center space-x-4">
             <button
               onClick={() => {
@@ -625,13 +535,13 @@ const AudioRecorder = () => {
                   audio.play();
                 }
               }}
-              className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-6 py-3 rounded-full transition-colors"
+              className="bg-white/80 backdrop-blur-sm border border-gray-200 hover:bg-white text-gray-700 px-6 py-3 rounded-2xl transition-all duration-300 hover:shadow-lg font-medium"
             >
               Reproducir
             </button>
             <button
               onClick={uploadAudio}
-              className="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-full transition-colors"
+              className="bg-gradient-to-r from-orange-500 via-orange-600 to-purple-600 hover:from-orange-400 hover:via-orange-500 hover:to-purple-500 text-white px-6 py-3 rounded-2xl transition-all duration-300 hover:shadow-lg font-medium"
             >
               Procesar Audio
             </button>
@@ -641,210 +551,320 @@ const AudioRecorder = () => {
     }
 
     return (
-      <div className="text-center space-y-8">
-        <p className="text-gray-600 text-lg">
-          {recordingState === 'recording' ? 'Grabando tu mensaje...' : 'Grabación pausada'}
-        </p>
+      <div className="text-center space-y-6">
+        <div className="space-y-4">
+          <h2 className="text-2xl font-bold text-gray-800">
+            {recordingState === 'recording' ? 'Grabando tu mensaje' : 'Grabación en pausa'}
+          </h2>
+          <p className="text-gray-600">
+            {recordingState === 'recording' 
+              ? 'Habla claramente hacia el micrófono' 
+              : 'Presiona play para continuar'
+            }
+          </p>
+        </div>
       </div>
     );
   };
 
-  return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* Header */}
-      <div className="flex items-center justify-between p-4">
-        <button className="p-2">
-          <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-        <div className="text-sm text-gray-500">
-          {new Date().toLocaleDateString()}
+  // Si no estamos en el cliente, mostrar un loading básico
+  if (!isClient) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-orange-50/30 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 mx-auto mb-4">
+            <div className="animate-spin rounded-full h-16 w-16 border-4 border-orange-200 border-t-orange-500"></div>
+          </div>
+          <p className="text-gray-600">Cargando grabadora...</p>
         </div>
       </div>
+    );
+  }
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 space-y-12">
-        
-        {/* Artistic Circle */}
-        <div className="relative">
-          <div className="w-64 h-64 rounded-full bg-gradient-to-br from-blue-100 via-emerald-50 to-blue-50 flex items-center justify-center shadow-lg">
-            <div className="w-48 h-48 rounded-full bg-gradient-to-br from-blue-200/30 via-emerald-100/50 to-cyan-100/40 flex items-center justify-center relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-br from-emerald-300/20 via-transparent to-blue-300/20"></div>
-              <div className="absolute top-8 left-12 w-16 h-16 bg-emerald-200/40 rounded-full blur-sm"></div>
-              <div className="absolute bottom-12 right-8 w-20 h-20 bg-blue-200/40 rounded-full blur-sm"></div>
-              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-cyan-300/60 rounded-full"></div>
+return (
+  <div 
+    className="bg-gradient-to-br from-orange-50 via-white to-orange-50/30 flex flex-col overflow-hidden relative"
+    style={{
+      height: '100dvh', // Dynamic viewport height - mejor para iOS
+      minHeight: '-webkit-fill-available', // Fallback para iOS Safari
+    }}
+  >
+
+    {/* Main Content - Ajustado para iOS */}
+    <div className="flex-1 flex flex-col items-center justify-center px-4 py-2 min-h-0">
+      
+      {/* Central Art Piece - Responsivo */}
+      <div className="relative mb-3">
+        <div 
+          className="rounded-full bg-gradient-to-br from-orange-100 to-purple-50 flex items-center justify-center shadow-xl border border-white/20"
+          style={{
+            width: 'min(40vw, 180px)',
+            height: 'min(40vw, 180px)',
+          }}
+        >
+          <div 
+            className="rounded-full bg-gradient-to-br from-orange-200/40 via-purple-100/30 to-white/70 flex items-center justify-center relative overflow-hidden"
+            style={{
+              width: 'min(32vw, 144px)',
+              height: 'min(32vw, 144px)',
+            }}
+          >
+            <div className="absolute inset-0 bg-gradient-to-br from-orange-300/20 via-purple-200/15 to-orange-200/30"></div>
+            
+            {/* Elementos flotantes - Escalados */}
+            <div 
+              className="absolute bg-orange-200/40 rounded-full blur-lg"
+              style={{
+                top: '15%',
+                left: '20%',
+                width: 'min(8vw, 36px)',
+                height: 'min(8vw, 36px)',
+              }}
+            ></div>
+            <div 
+              className="absolute bg-purple-100/50 rounded-full blur-lg"
+              style={{
+                bottom: '20%',
+                right: '15%',
+                width: 'min(10vw, 45px)',
+                height: 'min(10vw, 45px)',
+              }}
+            ></div>
+            <div 
+              className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-gradient-to-br from-orange-300/60 to-purple-300/40 rounded-full"
+              style={{
+                width: 'min(6vw, 28px)',
+                height: 'min(6vw, 28px)',
+              }}
+            ></div>
+            
+            {/* Floating elements pequeños */}
+            <div className="absolute top-3 right-3 w-2 h-2 bg-purple-400/40 rounded-full animate-bounce" style={{ animationDelay: '0.5s' }}></div>
+            <div className="absolute bottom-3 left-3 w-1.5 h-1.5 bg-orange-300/40 rounded-full animate-bounce" style={{ animationDelay: '1s' }}></div>
+          </div>
+        </div>
+        {recordingState === 'recording' && (
+          <>
+            <div 
+              className="absolute inset-0 rounded-full border-4 border-orange-400/60 animate-ping"
+              style={{
+                width: 'min(40vw, 180px)',
+                height: 'min(40vw, 180px)',
+              }}
+            ></div>
+            <div 
+              className="absolute inset-0 rounded-full border-2 border-purple-300/40 animate-pulse"
+              style={{
+                width: 'min(40vw, 180px)',
+                height: 'min(40vw, 180px)',
+              }}
+            ></div>
+          </>
+        )}
+      </div>
+
+      {/* Content - Más compacto para iOS */}
+      <div className="text-center space-y-2 max-w-xs px-2 mb-3">
+        {recordingState === 'idle' && (
+          <div className="space-y-2">
+            <h2 className="text-lg font-bold text-gray-800">Listo para grabar</h2>
+            <p className="text-gray-600 text-sm leading-relaxed">
+              Presiona el micrófono cuando estés listo.
+            </p>
+          </div>
+        )}
+
+        {recordingState === 'uploading' && (
+          <div className="space-y-3">
+            <div className="w-10 h-10 mx-auto">
+              <div className="animate-spin rounded-full h-10 w-10 border-3 border-orange-200 border-t-orange-500"></div>
+            </div>
+            <div className="space-y-1">
+              <h2 className="text-base font-semibold text-gray-800">Procesando audio</h2>
+              <p className="text-gray-600 text-xs">Esto tomará unos segundos...</p>
             </div>
           </div>
-          {recordingState === 'recording' && (
-            <div className="absolute inset-0 w-64 h-64 rounded-full border-4 border-emerald-400 animate-ping"></div>
-          )}
-        </div>
+        )}
 
-        {/* Content */}
-        {getMainContent()}
-
-        {/* Audio Visualization */}
-        {(recordingState === 'recording' || recordingState === 'paused') && (
-          <div className="w-full max-w-sm">
-            <div className="flex items-end justify-center space-x-1.5 h-32">
-              {audioData.map((height, index) => (
-                <div
-                  key={index}
-                  className="bg-gradient-to-t from-emerald-500 to-emerald-300 rounded-full transition-all duration-100 ease-out"
-                  style={{
-                    width: '8px',
-                    height: `${height}px`, // Usar directamente el valor del array
-                    opacity: recordingState === 'paused' ? 0.5 : 1
-                  }}
-                />
-              ))}
+        {recordingState === 'stopped' && (
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <h2 className="text-lg font-bold text-gray-800">¡Completado!</h2>
+              <p className="text-gray-600 text-sm">
+                Tu audio está listo.
+              </p>
             </div>
+            <div className="flex justify-center space-x-2">
+              <button
+                onClick={() => {
+                  if (audioUrl) {
+                    const audio = new Audio(audioUrl);
+                    audio.play();
+                  }
+                }}
+                className="bg-white/90 border border-gray-200 hover:bg-white text-gray-700 px-4 py-2 rounded-xl transition-all duration-300 hover:shadow-md font-medium text-xs"
+              >
+                ▶️ Reproducir
+              </button>
+              <button
+                onClick={uploadAudio}
+                className="bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-400 hover:to-purple-500 text-white px-4 py-2 rounded-xl transition-all duration-300 hover:shadow-md font-medium text-xs"
+              >
+                📤 Procesar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {(recordingState === 'recording' || recordingState === 'paused') && (
+          <div className="space-y-2">
+            <h2 className="text-lg font-bold text-gray-800">
+              {recordingState === 'recording' ? '🎙️ Grabando' : '⏸️ Pausado'}
+            </h2>
+            <p className="text-gray-600 text-sm">
+              {recordingState === 'recording' 
+                ? 'Habla claramente' 
+                : 'Presiona play para continuar'
+              }
+            </p>
           </div>
         )}
       </div>
 
-      {/* Bottom Controls */}
-      <div className="pb-8 pt-4">
-        <div className="flex items-center justify-center space-x-12">
-          
-          {/* Pause/Resume Button */}
-          {(recordingState === 'recording' || recordingState === 'paused') && (
-            <button
-              onClick={recordingState === 'recording' ? pauseRecording : resumeRecording}
-              className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center shadow-md"
-            >
-              {recordingState === 'recording' ? (
-                <Pause className="w-5 h-5 text-gray-700" />
-              ) : (
-                <Play className="w-5 h-5 text-gray-700 ml-0.5" />
-              )}
-            </button>
-          )}
+      {/* Audio Visualization - Altura fija pequeña */}
+      <div className="h-12 mb-2">
+        <AudioVisualizer 
+          isRecording={recordingState === 'recording' || recordingState === 'paused'}
+          isPaused={recordingState === 'paused'}
+        />
+      </div>
+    </div>
 
-          {/* Main Record Button */}
-          <div className="text-center">
+    {/* Bottom Controls - Compacto para iOS */}
+    <div className="pb-safe pb-4 flex-shrink-0">
+      <RecordingControls
+        recordingState={recordingState}
+        duration={duration}
+        onStartRecording={startRecording}
+        onPauseRecording={pauseRecording}
+        onResumeRecording={resumeRecording}
+        onStopRecording={stopRecording}
+        onResetRecorder={resetRecorder}
+      />
+    </div>
+
+    {/* Floating System Info Button - Más pequeño */}
+    <button
+      onClick={() => setShowSystemInfo(!showSystemInfo)}
+      className="fixed top-3 right-3 w-8 h-8 bg-gradient-to-br from-orange-500/90 to-purple-500/90 hover:from-orange-400 hover:to-purple-400 rounded-lg shadow-lg flex items-center justify-center transition-all duration-300 hover:scale-105 border border-white/20 z-20"
+      style={{ top: 'max(12px, env(safe-area-inset-top))' }}
+    >
+      <Smartphone className="w-3.5 h-3.5 text-white" />
+    </button>
+
+    {/* Panel de información del sistema */}
+    {showSystemInfo && (
+      <div className="fixed inset-0 bg-black/40 flex items-end justify-center z-30 p-3">
+        <div 
+          className="bg-white/95 rounded-t-2xl w-full max-w-sm border-t border-orange-100"
+          style={{
+            maxHeight: '60vh',
+            paddingBottom: 'max(16px, env(safe-area-inset-bottom))'
+          }}
+        >
+          <div className="sticky top-0 bg-white/95 rounded-t-2xl border-b border-orange-100/50 p-3 flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Smartphone className="w-4 h-4 text-orange-600" />
+              <h3 className="font-bold text-gray-800 text-sm">Sistema</h3>
+            </div>
             <button
-              onClick={recordingState === 'idle' ? startRecording : (recordingState === 'stopped' ? resetRecorder : null)}
-              disabled={recordingState === 'uploading'}
-              className={`w-20 h-20 rounded-full flex items-center justify-center shadow-lg transition-all duration-200 ${
-                recordingState === 'idle' || recordingState === 'stopped' 
-                  ? 'bg-emerald-500 hover:bg-emerald-600 active:scale-95' 
-                  : 'bg-emerald-400 cursor-not-allowed'
-              }`}
+              onClick={() => setShowSystemInfo(false)}
+              className="p-1 hover:bg-orange-50 rounded-lg transition-colors"
             >
-              <div className={`w-6 h-6 rounded-full ${
-                recordingState === 'idle' || recordingState === 'stopped' ? 'bg-white' : 'bg-white animate-pulse'
-              }`} />
+              <X className="w-4 h-4 text-gray-600" />
             </button>
-            
-            {/* Timer */}
-            {(recordingState !== 'idle' && recordingState !== 'uploading') && (
-              <div className="mt-2 text-emerald-600 font-mono text-lg font-semibold">
-                {formatDuration(duration)}
+          </div>
+
+          <div className="p-3 overflow-y-auto">
+            <div className="space-y-2">
+              <div className="bg-orange-50/50 rounded-lg p-2">
+                <h4 className="font-semibold text-gray-800 mb-1 text-xs">User Agent</h4>
+                <div className="text-xs font-mono text-gray-700 break-all leading-relaxed bg-white/50 p-2 rounded">
+                  {isClient && typeof navigator !== 'undefined' ? navigator.userAgent : 'Loading...'}
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-1.5">
+                <div className="bg-blue-50 rounded-lg p-2">
+                  <div className="text-blue-600 font-medium text-xs">Plataforma</div>
+                  <div className="text-blue-800 font-mono text-xs mt-0.5">
+                    {isClient && typeof navigator !== 'undefined' ? navigator.platform : 'Loading...'}
+                  </div>
+                </div>
+                <div className="bg-green-50 rounded-lg p-2">
+                  <div className="text-green-600 font-medium text-xs">Idioma</div>
+                  <div className="text-green-800 font-mono text-xs mt-0.5">
+                    {isClient && typeof navigator !== 'undefined' ? navigator.language : 'Loading...'}
+                  </div>
+                </div>
+                <div className="bg-purple-50 rounded-lg p-2">
+                  <div className="text-purple-600 font-medium text-xs">Pantalla</div>
+                  <div className="text-purple-800 font-mono text-xs mt-0.5">
+                    {isClient && typeof window !== 'undefined' ? `${window.screen.width}x${window.screen.height}` : 'Loading...'}
+                  </div>
+                </div>
+                <div className="bg-orange-50 rounded-lg p-2">
+                  <div className="text-orange-600 font-medium text-xs">Viewport</div>
+                  <div className="text-orange-800 font-mono text-xs mt-0.5">
+                    {isClient && typeof window !== 'undefined' ? `${window.innerWidth}x${window.innerHeight}` : 'Loading...'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Error Toast - Posicionado para iOS */}
+    {error && (
+      <div 
+        className="fixed left-3 right-3 bg-red-50 border border-red-200 rounded-lg p-2.5 max-w-sm mx-auto shadow-lg z-10"
+        style={{
+          bottom: 'max(16px, env(safe-area-inset-bottom) + 16px)'
+        }}
+      >
+        <div className="flex items-start space-x-2">
+          <div className="w-3 h-3 bg-red-500 rounded-full flex-shrink-0 mt-0.5"></div>
+          <div className="flex-1">
+            <p className="text-red-800 text-xs font-medium">{error}</p>
+            {error.includes('Safari') && (
+              <div className="mt-1 text-xs text-red-600 bg-red-100/50 rounded p-1.5">
+                <p><strong>📱 Para iPhone:</strong></p>
+                <p>Configuración → Safari → Micrófono → Permitir</p>
               </div>
             )}
           </div>
-
-          {/* Stop Button */}
-          {(recordingState === 'recording' || recordingState === 'paused') && (
-            <button
-              onClick={stopRecording}
-              className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center shadow-md"
-            >
-              <X className="w-5 h-5 text-red-600" />
-            </button>
-          )}
-        </div>
-
-        {/* Bottom Status */}
-        <div className="text-center mt-6">
-          {recordingState === 'paused' && (
-            <p className="text-gray-500 text-sm">Pausado</p>
-          )}
-          {recordingState === 'stopped' && (
-            <p className="text-gray-500 text-sm">Listo</p>
-          )}
+          <button
+            onClick={() => setError(null)}
+            className="p-0.5 hover:bg-red-100 rounded transition-colors"
+          >
+            <X className="w-3 h-3 text-red-600" />
+          </button>
         </div>
       </div>
+    )}
 
-      {/* Botón flotante de información del sistema */}
-      <button
-        onClick={() => setShowSystemInfo(!showSystemInfo)}
-        className="fixed top-4 right-4 w-10 h-10 bg-white/90 backdrop-blur-sm hover:bg-white rounded-full shadow-lg flex items-center justify-center transition-all duration-200 hover:scale-105 z-20"
-        title="Información del sistema"
-      >
-        <Smartphone className="w-4 h-4 text-gray-600" />
-      </button>
-
-      {/* Panel de información del sistema */}
-      {showSystemInfo && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-end justify-center z-30 p-4">
-          <div className="bg-white rounded-t-3xl w-full max-w-md max-h-[80vh] overflow-y-auto">
-            {/* Header del panel */}
-            <div className="sticky top-0 bg-white rounded-t-3xl border-b border-gray-200 p-4 flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Smartphone className="w-5 h-5 text-gray-600" />
-                <h3 className="font-semibold text-gray-800">Información del Sistema</h3>
-              </div>
-              <button
-                onClick={() => setShowSystemInfo(false)}
-                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-              >
-                <X className="w-4 h-4 text-gray-600" />
-              </button>
-            </div>
-
-            {/* Contenido del panel */}
-            <div className="p-4">
-              {/* Solo User Agent */}
-              <div>
-                <h4 className="font-medium text-gray-800 mb-3">User Agent</h4>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <div className="text-xs font-mono text-gray-700 break-all leading-relaxed">
-                    {navigator.userAgent}
-                  </div>
-                </div>
-                
-                {/* Info adicional básica */}
-                <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
-                  <div className="bg-blue-50 rounded-lg p-2">
-                    <div className="text-blue-600 font-medium">Plataforma</div>
-                    <div className="text-blue-800 font-mono">{navigator.platform}</div>
-                  </div>
-                  <div className="bg-green-50 rounded-lg p-2">
-                    <div className="text-green-600 font-medium">Idioma</div>
-                    <div className="text-green-800 font-mono">{navigator.language}</div>
-                  </div>
-                  <div className="bg-purple-50 rounded-lg p-2">
-                    <div className="text-purple-600 font-medium">Pantalla</div>
-                    <div className="text-purple-800 font-mono">{window.screen.width}x{window.screen.height}</div>
-                  </div>
-                  <div className="bg-orange-50 rounded-lg p-2">
-                    <div className="text-orange-600 font-medium">Viewport</div>
-                    <div className="text-orange-800 font-mono">{window.innerWidth}x{window.innerHeight}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Error Message */}
-      {error && (
-        <div className="fixed bottom-4 left-4 right-4 bg-red-100 border border-red-300 rounded-lg p-4 max-w-md mx-auto">
-          <p className="text-red-700 text-sm text-center font-medium">{error}</p>
-          {error.includes('Safari') && (
-            <div className="mt-2 text-xs text-red-600">
-              <p>📱 <strong>Para iPhone:</strong></p>
-              <p>Configuración → Safari → Cámara y micrófono → Permitir</p>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-};
-
+    {/* CSS adicional para iOS */}
+    <style jsx>{`
+      @supports (-webkit-touch-callout: none) {
+        /* Solo para iOS */
+        .ios-height {
+          height: -webkit-fill-available;
+        }
+      }
+    `}</style>
+  </div>
+);
+}
 export default AudioRecorder;
