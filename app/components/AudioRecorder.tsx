@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { InfoIcon, Smartphone, X } from 'lucide-react';
 import AudioVisualizer from './AudioVisualizer';
 import RecordingControls from './RecordingControls';
+import UploadProgress from './UploadProgress';
+
 
 const AudioRecorder = () => {
   const [recordingState, setRecordingState] = useState('idle');
@@ -19,6 +21,11 @@ const AudioRecorder = () => {
   const timerRef = useRef(null);
   const audioContextRef = useRef(null);
   const analyserRef = useRef(null);
+
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadSpeed, setUploadSpeed] = useState('');
+
 
   // Detectar si estamos en el cliente
   useEffect(() => {
@@ -457,6 +464,9 @@ const AudioRecorder = () => {
     setAudioUrl(null);
     setDuration(0);
     setError(null);
+    setUploadProgress(0);
+    setIsUploading(false);
+    setUploadSpeed('');
     audioChunksRef.current = [];
     addLog('info', 'Grabador reiniciado');
   };
@@ -465,27 +475,136 @@ const AudioRecorder = () => {
     if (!audioBlob) return;
     
     setRecordingState('uploading');
-    addLog('info', 'Iniciando subida de audio', {
+    setIsUploading(true);
+    setUploadProgress(0);
+    setUploadSpeed('');
+    
+    addLog('info', 'Iniciando subida por chunks', {
       size: audioBlob.size,
       type: audioBlob.type
     });
     
+    const chunkSize = 1024 * 1024; // 1MB chunks
+    const totalChunks = Math.ceil(audioBlob.size / chunkSize);
+    const uploadId = `upload_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const fileName = `recording_${Date.now()}.${audioBlob.type.includes('wav') ? 'wav' : 'webm'}`;
+    
+    const startTime = Date.now();
+    let uploadedBytes = 0;
+    
     try {
-      const formData = new FormData();
-      formData.append('audio', audioBlob, `recording_${Date.now()}.${audioBlob.type.includes('wav') ? 'wav' : 'webm'}`);
+      // Subir cada chunk
+      for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+        const start = chunkIndex * chunkSize;
+        const end = Math.min(start + chunkSize, audioBlob.size);
+        const chunk = audioBlob.slice(start, end);
+        
+        const formData = new FormData();
+        formData.append('chunk', chunk);
+        formData.append('chunkIndex', chunkIndex.toString());
+        formData.append('totalChunks', totalChunks.toString());
+        formData.append('uploadId', uploadId);
+        formData.append('fileName', fileName);
+        formData.append('mimeType', audioBlob.type);
+        
+        const chunkStartTime = Date.now();
+        
+        // Subir chunk al servidor
+        const response = await fetch('https://record.kalmsystem.com/api/upload-chunk', {
+          method: 'POST',
+          body: formData
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(`Error en chunk ${chunkIndex}: ${response.status} - ${errorData.message || 'Error desconocido'}`);
+        }
+        
+        const responseData = await response.json();
+        
+        if (!responseData.success) {
+          throw new Error(`Chunk ${chunkIndex} falló: ${responseData.message}`);
+        }
+        
+        const chunkEndTime = Date.now();
+        uploadedBytes += chunk.size;
+        
+        // Calcular velocidad de subida
+        const timeElapsed = (chunkEndTime - startTime) / 1000; // segundos
+        const speed = uploadedBytes / timeElapsed; // bytes por segundo
+        const speedMBps = (speed / (1024 * 1024)).toFixed(1); // MB/s
+        setUploadSpeed(`${speedMBps} MB/s`);
+        
+        // Actualizar progreso
+        const progress = Math.round(((chunkIndex + 1) / totalChunks) * 100);
+        setUploadProgress(progress);
+        
+        addLog('info', `Chunk ${chunkIndex + 1}/${totalChunks} subido exitosamente`, {
+          chunkSize: chunk.size,
+          progress: progress,
+          speed: speedMBps,
+          uploadId: responseData.uploadId
+        });
+        
+        // Pequeña pausa para no saturar el servidor
+        if (chunkIndex < totalChunks - 1) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
       
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Finalizar upload en el servidor
+      addLog('info', 'Finalizando subida en el servidor', { uploadId, totalChunks });
       
-      addLog('success', 'Audio procesado exitosamente', {
-        size: audioBlob.size,
-        duration: duration
+      const completeResponse = await fetch('https://record.kalmsystem.com/api/complete-upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          uploadId, 
+          totalChunks, 
+          fileName,
+          mimeType: audioBlob.type,
+          totalSize: audioBlob.size
+        })
       });
-      alert('Audio procesado exitosamente!');
+      
+      if (!completeResponse.ok) {
+        const errorData = await completeResponse.json().catch(() => ({}));
+        throw new Error(`Error al finalizar subida: ${completeResponse.status} - ${errorData.message || 'Error desconocido'}`);
+      }
+      
+      const result = await completeResponse.json();
+      
+      if (!result.success) {
+        throw new Error(`Error al finalizar subida: ${result.message}`);
+      }
+      
+      addLog('success', 'Audio subido exitosamente por chunks', {
+        uploadId,
+        totalChunks,
+        finalSize: audioBlob.size,
+        result: result
+      });
+      
+      // Pequeña pausa para mostrar 100%
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      alert(`¡Audio procesado exitosamente!\n\nArchivo: ${fileName}\nTamaño: ${(audioBlob.size / (1024 * 1024)).toFixed(2)} MB\nChunks: ${totalChunks}`);
       resetRecorder();
+      
     } catch (err) {
-      addLog('error', 'Error al procesar audio', err.message);
-      setError('Error al procesar el audio');
+      console.error('Error en subida por chunks:', err);
+      addLog('error', 'Error al subir por chunks', {
+        error: err.message,
+        uploadId,
+        uploadedChunks: Math.floor(uploadedBytes / chunkSize),
+        totalChunks
+      });
+      setError(`Error al subir: ${err.message}`);
       setRecordingState('stopped');
+    } finally {
+      setIsUploading(false);
+      setUploadProgress(0);
+      setUploadSpeed('');
     }
   };
 
@@ -674,17 +793,20 @@ return (
           </div>
         )}
 
-        {recordingState === 'uploading' && (
-          <div className="space-y-3">
-            <div className="w-10 h-10 mx-auto">
-              <div className="animate-spin rounded-full h-10 w-10 border-3 border-orange-200 border-t-orange-500"></div>
-            </div>
-            <div className="space-y-1">
-              <h2 className="text-base font-semibold text-gray-800">Procesando audio</h2>
-              <p className="text-gray-600 text-xs">Esto tomará unos segundos...</p>
-            </div>
+      {recordingState === 'uploading' && (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <h2 className="text-base font-semibold text-gray-800">Subiendo audio</h2>
+            <p className="text-gray-600 text-xs">Enviando por chunks para mejor estabilidad...</p>
           </div>
-        )}
+          <UploadProgress 
+            progress={uploadProgress}
+            isVisible={isUploading}
+            fileName={`recording_${Date.now()}.webm`}
+            uploadSpeed={uploadSpeed}
+          />
+        </div>
+      )}
 
         {recordingState === 'stopped' && (
           <div className="space-y-3">
