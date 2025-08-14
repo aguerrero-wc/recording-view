@@ -510,7 +510,12 @@ const AudioRecorder = () => {
         const chunkStartTime = Date.now();
         
         // Subir chunk al servidor
-        const response = await fetch('https://record.kalmsystem.com/api/upload-chunk', {
+        // const response = await fetch('https://record.kalmsystem.com/api/upload-chunk', {
+        //   method: 'POST',
+        //   body: formData
+        // });
+
+        const response = await fetch('http://localhost:3078/api/upload-chunk', {
           method: 'POST',
           body: formData
         });
@@ -555,7 +560,7 @@ const AudioRecorder = () => {
       // Finalizar upload en el servidor
       addLog('info', 'Finalizando subida en el servidor', { uploadId, totalChunks });
       
-      const completeResponse = await fetch('https://record.kalmsystem.com/api/complete-upload', {
+      const completeResponse = await fetch('http://localhost:3078/api/complete-upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -573,6 +578,8 @@ const AudioRecorder = () => {
       }
       
       const result = await completeResponse.json();
+      console.log('resultttttttttt', result.url);
+      
       
       if (!result.success) {
         throw new Error(`Error al finalizar subida: ${result.message}`);
@@ -588,7 +595,7 @@ const AudioRecorder = () => {
       // Pequeña pausa para mostrar 100%
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      alert(`¡Audio procesado exitosamente!\n\nArchivo: ${fileName}\nTamaño: ${(audioBlob.size / (1024 * 1024)).toFixed(2)} MB\nChunks: ${totalChunks}`);
+      alert(`¡Audio procesado exitosamente!\n\nArchivo: ${fileName}\nTamaño: ${(audioBlob.size / (1024 * 1024)).toFixed(2)} MB\nChunks: ${totalChunks}\n url: ${result.url}`);
       resetRecorder();
       
     } catch (err) {
@@ -711,6 +718,21 @@ return (
 
     {/* Main Content - Ajustado para iOS */}
     <div className="flex-1 flex flex-col items-center justify-center px-4 py-2 min-h-0">
+      
+      {/* Logo Kalmsystem - Solo en estado idle */}
+      {recordingState === 'idle' && (
+        <div className="w-full h-24 px-6 mb-8 flex flex-col items-center">
+          <div className="relative w-full max-w-sm mx-auto">
+            <div className="w-full rounded-3xl flex items-center justify-center ">
+              <img 
+                src="/assets/KALM.png" 
+                alt="Kalmsystem" 
+                className="w-full h-18 object-contain z-10"
+              />
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* Central Art Piece - Responsivo */}
       <div className="relative mb-3">
@@ -876,13 +898,13 @@ return (
     </div>
 
     {/* Floating System Info Button - Más pequeño */}
-    <button
+    {/* <button
       onClick={() => setShowSystemInfo(!showSystemInfo)}
       className="fixed top-3 right-3 w-8 h-8 bg-gradient-to-br from-orange-500/90 to-purple-500/90 hover:from-orange-400 hover:to-purple-400 rounded-lg shadow-lg flex items-center justify-center transition-all duration-300 hover:scale-105 border border-white/20 z-20"
       style={{ top: 'max(12px, env(safe-area-inset-top))' }}
     >
       <Smartphone className="w-3.5 h-3.5 text-white" />
-    </button>
+    </button> */}
 
     {/* Panel de información del sistema */}
     {showSystemInfo && (
