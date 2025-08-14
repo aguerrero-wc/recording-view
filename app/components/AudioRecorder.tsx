@@ -25,6 +25,8 @@ const AudioRecorder = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadSpeed, setUploadSpeed] = useState('');
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [uploadResult, setUploadResult] = useState(null);
 
 
   // Detectar si estamos en el cliente
@@ -467,8 +469,26 @@ const AudioRecorder = () => {
     setUploadProgress(0);
     setIsUploading(false);
     setUploadSpeed('');
+    setShowSuccessModal(false);
+    setUploadResult(null);
     audioChunksRef.current = [];
     addLog('info', 'Grabador reiniciado');
+  };
+
+  const copyToClipboard = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      addLog('success', 'URL copiada al portapapeles');
+    } catch (err) {
+      // Fallback para navegadores que no soportan clipboard API
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      addLog('success', 'URL copiada al portapapeles (fallback)');
+    }
   };
 
   const uploadAudio = async () => {
@@ -595,8 +615,14 @@ const AudioRecorder = () => {
       // Pequeña pausa para mostrar 100%
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      alert(`¡Audio procesado exitosamente!\n\nArchivo: ${fileName}\nTamaño: ${(audioBlob.size / (1024 * 1024)).toFixed(2)} MB\nChunks: ${totalChunks}\n url: ${result.url}`);
-      resetRecorder();
+      // Mostrar modal de éxito
+      setUploadResult({
+        fileName,
+        fileSize: (audioBlob.size / (1024 * 1024)).toFixed(2),
+        totalChunks,
+        url: result.url
+      });
+      setShowSuccessModal(true);
       
     } catch (err) {
       console.error('Error en subida por chunks:', err);
@@ -995,6 +1021,65 @@ return (
           >
             <X className="w-3 h-3 text-red-600" />
           </button>
+        </div>
+      </div>
+    )}
+
+    {/* Modal de éxito */}
+    {showSuccessModal && uploadResult && (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-3xl w-full max-w-sm mx-auto shadow-2xl border border-orange-100 overflow-hidden">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-orange-500 to-purple-600 p-6 text-center relative">
+            <div className="w-16 h-16 mx-auto mb-3 bg-white/20 rounded-full flex items-center justify-center">
+              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-bold text-white mb-1">¡Éxito!</h2>
+            <p className="text-orange-100 text-sm">Audio procesado correctamente</p>
+          </div>
+
+          {/* Content */}
+          <div className="p-6 space-y-4">
+            {/* Info del archivo */}
+
+
+            {/* URL con botón de copiar */}
+            <div className="space-y-2">
+              <label className="text-gray-600 text-sm font-medium">URL del archivo:</label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={uploadResult.url}
+                  readOnly
+                  className="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl pr-12 text-gray-700 font-mono"
+                />
+                <button
+                  onClick={() => copyToClipboard(uploadResult.url)}
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1.5 bg-gradient-to-r from-orange-500 to-purple-600 text-white rounded-lg hover:from-orange-400 hover:to-purple-500 transition-all duration-200"
+                  title="Copiar URL"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="p-6 pt-0">
+            <button
+              onClick={() => {
+                setShowSuccessModal(false);
+                resetRecorder();
+              }}
+              className="w-full bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-400 hover:to-purple-500 text-white py-3 rounded-xl font-medium transition-all duration-200 shadow-lg hover:shadow-xl"
+            >
+              Grabar nuevo audio
+            </button>
+          </div>
         </div>
       </div>
     )}
