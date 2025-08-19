@@ -1,5 +1,3 @@
-# Dockerfile
-
 # Stage 1: Build dependencies
 FROM node:20-alpine AS deps
 RUN apk add --no-cache libc6-compat
@@ -17,25 +15,24 @@ RUN npm run build
 
 # Stage 3: Production image
 FROM node:20-alpine AS production
+
 # Instalar wget para healthcheck
-RUN apk add --no-cache wget \
-    && addgroup -g 1000 -S nodejs \
-    && adduser -S nextjs -u 1000
+RUN apk add --no-cache wget
 
 WORKDIR /app
 
+# Usar el usuario node existente (UID 1000) en lugar de crear uno nuevo
 # Crear directorios necesarios con permisos adecuados
-RUN mkdir -p .next/cache \
-    && chown -R nextjs:nodejs /app
+RUN chown -R node:node /app
 
 # Copiar dependencias de producción
-COPY --from=deps --chown=nextjs:nodejs /app/node_modules ./node_modules
-# Copiar build de la aplicación
-COPY --from=builder --chown=nextjs:nodejs /app/build ./build
-COPY --from=builder --chown=nextjs:nodejs /app/package*.json ./
+COPY --from=deps --chown=node:node /app/node_modules ./node_modules
+# Copiar build de la aplicación React
+COPY --from=builder --chown=node:node /app/build ./build
+COPY --from=builder --chown=node:node /app/package*.json ./
 
 # Cambiar a usuario no-root
-USER nextjs
+USER node
 
 # Configuración de seguridad y rendimiento
 ENV NODE_ENV=production

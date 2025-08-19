@@ -5,19 +5,14 @@ services:
     build:
       context: .
       target: production
-    user: "1000:1000"
+    # Remover la línea user ya que se maneja en el Dockerfile
     environment:
       - NODE_ENV=production
       - PORT=3000
     restart: unless-stopped
     networks:
       - app-network
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
+    # El healthcheck ya está definido en el Dockerfile, pero se puede sobrescribir aquí si es necesario
     deploy:
       resources:
         limits:
@@ -30,6 +25,7 @@ services:
       - no-new-privileges:true
     read_only: true
     tmpfs:
+      # Directorio temporal que la aplicación React puede necesitar
       - /tmp
     ports:
       - "3000:3000"
