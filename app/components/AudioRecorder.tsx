@@ -528,14 +528,8 @@ const AudioRecorder = () => {
         formData.append('mimeType', audioBlob.type);
         
         const chunkStartTime = Date.now();
-        
-        // Subir chunk al servidor
-        // const response = await fetch('https://record.kalmsystem.com/api/upload-chunk', {
-        //   method: 'POST',
-        //   body: formData
-        // });
 
-        const response = await fetch('http://localhost:3078/api/upload-chunk', {
+        const response = await fetch('https://record-voice-api.kalmsystem.com/api/upload-chunk', {
           method: 'POST',
           body: formData
         });
@@ -580,7 +574,7 @@ const AudioRecorder = () => {
       // Finalizar upload en el servidor
       addLog('info', 'Finalizando subida en el servidor', { uploadId, totalChunks });
       
-      const completeResponse = await fetch('http://localhost:3078/api/complete-upload', {
+      const completeResponse = await fetch('https://record-voice-api.kalmsystem.com/api/complete-upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
