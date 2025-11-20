@@ -9,7 +9,7 @@ interface RecordingControlsProps {
   onResumeRecording: () => void;
   onStopRecording: () => void;
   onResetRecorder: () => void;
-  disabled?: boolean; // ✅ Ya está definido
+  disabled?: boolean;
 }
 
 const RecordingControls: React.FC<RecordingControlsProps> = ({
@@ -29,15 +29,13 @@ const RecordingControls: React.FC<RecordingControlsProps> = ({
   };
 
   const getMainButtonAction = () => {
-    // ✅ MODIFICAR: No ejecutar acción si está disabled
     if (disabled && recordingState === 'idle') return () => {};
     if (recordingState === 'idle') return onStartRecording;
     if (recordingState === 'stopped') return onResetRecorder;
-    return () => {}; // No action for recording/paused/uploading states
+    return () => {};
   };
 
   const isMainButtonDisabled = () => {
-    // ✅ MODIFICAR: Incluir la prop disabled en el estado idle
     if (recordingState === 'idle' && disabled) return true;
     return recordingState === 'uploading' || recordingState === 'recording' || recordingState === 'paused';
   };
@@ -45,7 +43,6 @@ const RecordingControls: React.FC<RecordingControlsProps> = ({
   const getMainButtonStyles = () => {
     const baseStyles = "w-24 h-24 rounded-3xl flex items-center justify-center shadow-2xl transition-all duration-300";
     
-    // ✅ MODIFICAR: Agregar estilos para estado deshabilitado
     if (recordingState === 'idle') {
       if (disabled) {
         return `${baseStyles} bg-gray-300 cursor-not-allowed opacity-60`;
@@ -62,7 +59,6 @@ const RecordingControls: React.FC<RecordingControlsProps> = ({
 
   const getMainButtonIcon = () => {
     if (recordingState === 'idle') {
-      // ✅ MODIFICAR: Cambiar color del icono cuando está disabled
       return <Mic className={`w-8 h-8 ${disabled ? 'text-gray-500' : 'text-white'}`} />;
     } else if (recordingState === 'stopped') {
       return <RotateCcw className="w-8 h-8 text-white" />;
@@ -80,32 +76,105 @@ const RecordingControls: React.FC<RecordingControlsProps> = ({
     }
   };
 
-  const showSideButtons = recordingState === 'recording' || recordingState === 'paused';
+  // ✅ NUEVO: Vista especial para estado "recording"
+  if (recordingState === 'recording') {
+    return (
+      <div className="pb-8 pt-6">
+        {/* Timer prominente arriba */}
+        <div className="text-center mb-6">
+          <div className="inline-flex items-center space-x-2 bg-red-50 px-6 py-3 rounded-2xl border border-red-100">
+            <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+            <span className="text-red-600 font-mono text-2xl font-bold tracking-wider">
+              {formatDuration(duration)}
+            </span>
+          </div>
+        </div>
+
+        {/* Botones principales centrados y grandes */}
+        <div className="flex items-center justify-center space-x-6">
+          {/* Botón de Pausa - Grande */}
+          <button
+            onClick={onPauseRecording}
+            className="w-20 h-20 bg-white/90 backdrop-blur-sm hover:bg-white border-2 border-orange-200 rounded-2xl flex flex-col items-center justify-center shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105 active:scale-95 group"
+            title="Pausar grabación"
+          >
+            <Pause className="w-8 h-8 text-orange-600 group-hover:text-orange-700 transition-colors" />
+            <span className="text-xs text-orange-600 font-medium mt-1">Pausar</span>
+          </button>
+
+          {/* Botón de Detener - Grande */}
+          <button
+            onClick={onStopRecording}
+            className="w-20 h-20 bg-white/90 backdrop-blur-sm hover:bg-white border-2 border-red-200 rounded-2xl flex flex-col items-center justify-center shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105 active:scale-95 group"
+            title="Detener grabación"
+          >
+            <Square className="w-8 h-8 text-red-500 fill-current group-hover:text-red-600 transition-colors" />
+            <span className="text-xs text-red-500 font-medium mt-1">Detener</span>
+          </button>
+        </div>
+
+        {/* Status text - ✅ CAMBIADO: como estaba antes */}
+        <div className="text-center mt-6">
+          <div className="flex items-center justify-center space-x-3">
+            <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+            <p className="text-red-600 text-sm font-medium">Grabando...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ✅ NUEVO: Vista especial para estado "paused"
+  if (recordingState === 'paused') {
+    return (
+      <div className="pb-8 pt-6">
+        {/* Timer prominente arriba */}
+        <div className="text-center mb-6">
+          <div className="inline-flex items-center space-x-2 bg-purple-50 px-6 py-3 rounded-2xl border border-purple-200">
+            <div className="w-3 h-3 bg-purple-400 rounded-full animate-pulse"></div>
+            <span className="text-purple-600 font-mono text-2xl font-bold tracking-wider">
+              {formatDuration(duration)}
+            </span>
+          </div>
+        </div>
+
+        {/* Botones principales centrados y grandes */}
+        <div className="flex items-center justify-center space-x-6">
+          {/* Botón de Reanudar - Grande */}
+          <button
+            onClick={onResumeRecording}
+            className="w-20 h-20 bg-gradient-to-br from-purple-100/90 to-purple-200/80 backdrop-blur-sm hover:from-purple-100 hover:to-purple-200 border-2 border-purple-300 rounded-2xl flex flex-col items-center justify-center shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105 active:scale-95 group"
+            title="Reanudar grabación"
+          >
+            <Play className="w-8 h-8 text-purple-600 ml-1 group-hover:text-purple-700 transition-colors" />
+            <span className="text-xs text-purple-600 font-medium mt-1">Reanudar</span>
+          </button>
+
+          {/* Botón de Detener - Grande */}
+          <button
+            onClick={onStopRecording}
+            className="w-20 h-20 bg-white/90 backdrop-blur-sm hover:bg-white border-2 border-red-200 rounded-2xl flex flex-col items-center justify-center shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105 active:scale-95 group"
+            title="Detener grabación"
+          >
+            <Square className="w-8 h-8 text-red-500 fill-current group-hover:text-red-600 transition-colors" />
+            <span className="text-xs text-red-500 font-medium mt-1">Detener</span>
+          </button>
+        </div>
+
+        {/* Status text */}
+        <div className="text-center mt-6">
+          <p className="text-purple-600 text-sm font-medium">Grabación pausada</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ✅ Vista normal para idle, stopped, uploading
   const showTimer = recordingState !== 'idle' && recordingState !== 'uploading';
 
   return (
     <div className="pb-8 pt-6">
-      <div className="flex items-center justify-center space-x-8">
-        
-        {/* Left Button: Pause/Resume */}
-        {showSideButtons && (
-          <button
-            onClick={recordingState === 'recording' ? onPauseRecording : onResumeRecording}
-            className={`w-14 h-14 backdrop-blur-sm border rounded-2xl flex items-center justify-center shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 ${
-              recordingState === 'paused' 
-                ? 'bg-purple-100/80 hover:bg-purple-100 border-purple-200' 
-                : 'bg-white/80 hover:bg-white border-orange-100'
-            }`}
-            title={recordingState === 'recording' ? 'Pausar' : 'Reanudar'}
-          >
-            {recordingState === 'recording' ? (
-              <Pause className="w-6 h-6 text-orange-600" />
-            ) : (
-              <Play className="w-6 h-6 text-purple-600 ml-0.5" />
-            )}
-          </button>
-        )}
-
+      <div className="flex items-center justify-center">
         {/* Center: Main Record Button */}
         <div className="text-center">
           <button
@@ -115,7 +184,7 @@ const RecordingControls: React.FC<RecordingControlsProps> = ({
             title={
               recordingState === 'idle' 
                 ? disabled 
-                  ? 'Acepta los términos para grabar'  // ✅ NUEVO: Tooltip cuando está disabled
+                  ? 'Acepta los términos para grabar'
                   : 'Iniciar grabación'
                 : recordingState === 'stopped' 
                 ? 'Nueva grabación' 
@@ -131,40 +200,15 @@ const RecordingControls: React.FC<RecordingControlsProps> = ({
               {formatDuration(duration)}
             </div>
           )}
-          
-          
         </div>
-
-        {/* Right Button: Stop */}
-        {showSideButtons && (
-          <button
-            onClick={onStopRecording}
-            className="w-14 h-14 bg-white/80 backdrop-blur-sm hover:bg-white border border-red-100 rounded-2xl flex items-center justify-center shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
-            title="Detener grabación"
-          >
-            <Square className="w-6 h-6 text-red-500 fill-current" />
-          </button>
-        )}
       </div>
 
       {/* Status Indicator */}
       <div className="text-center mt-6">
-        {recordingState === 'paused' && (
-          <div className="flex items-center justify-center space-x-3">
-            <div className="w-3 h-3 bg-purple-400 rounded-full animate-pulse"></div>
-            <p className="text-purple-600 text-sm font-medium">Pausado</p>
-          </div>
-        )}
         {recordingState === 'stopped' && (
           <div className="flex items-center justify-center space-x-3">
             <div className="w-3 h-3 bg-green-500 rounded-full"></div>
             <p className="text-green-600 text-sm font-medium">Listo para procesar</p>
-          </div>
-        )}
-        {recordingState === 'recording' && (
-          <div className="flex items-center justify-center space-x-3">
-            <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
-            <p className="text-red-600 text-sm font-medium">Grabando...</p>
           </div>
         )}
         {recordingState === 'uploading' && (
