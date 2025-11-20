@@ -5,7 +5,6 @@ services:
     build:
       context: .
       target: production
-    # Remover la línea user ya que se maneja en el Dockerfile
     environment:
       - NODE_ENV=production
       - PORT=3000
@@ -25,7 +24,6 @@ services:
       - no-new-privileges:true
     read_only: true
     tmpfs:
-      # Directorio temporal que la aplicación React puede necesitar
       - /tmp
     ports:
       - "3000:3000"

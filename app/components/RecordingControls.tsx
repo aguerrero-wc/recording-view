@@ -9,6 +9,7 @@ interface RecordingControlsProps {
   onResumeRecording: () => void;
   onStopRecording: () => void;
   onResetRecorder: () => void;
+  disabled?: boolean; // ✅ Ya está definido
 }
 
 const RecordingControls: React.FC<RecordingControlsProps> = ({
@@ -19,6 +20,7 @@ const RecordingControls: React.FC<RecordingControlsProps> = ({
   onResumeRecording,
   onStopRecording,
   onResetRecorder,
+  disabled = false,
 }) => {
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -27,20 +29,30 @@ const RecordingControls: React.FC<RecordingControlsProps> = ({
   };
 
   const getMainButtonAction = () => {
+    // ✅ MODIFICAR: No ejecutar acción si está disabled
+    if (disabled && recordingState === 'idle') return () => {};
     if (recordingState === 'idle') return onStartRecording;
     if (recordingState === 'stopped') return onResetRecorder;
     return () => {}; // No action for recording/paused/uploading states
   };
 
   const isMainButtonDisabled = () => {
+    // ✅ MODIFICAR: Incluir la prop disabled en el estado idle
+    if (recordingState === 'idle' && disabled) return true;
     return recordingState === 'uploading' || recordingState === 'recording' || recordingState === 'paused';
   };
 
   const getMainButtonStyles = () => {
-    const baseStyles = "w-24 h-24 rounded-3xl flex items-center justify-center shadow-2xl transition-all duration-300 transform hover:scale-105";
+    const baseStyles = "w-24 h-24 rounded-3xl flex items-center justify-center shadow-2xl transition-all duration-300";
     
-    if (recordingState === 'idle' || recordingState === 'stopped') {
-      return `${baseStyles} bg-gradient-to-br from-orange-500 to-orange-600 hover:from-orange-400 hover:to-orange-500 active:scale-95`;
+    // ✅ MODIFICAR: Agregar estilos para estado deshabilitado
+    if (recordingState === 'idle') {
+      if (disabled) {
+        return `${baseStyles} bg-gray-300 cursor-not-allowed opacity-60`;
+      }
+      return `${baseStyles} bg-gradient-to-br from-orange-500 to-orange-600 hover:from-orange-400 hover:to-orange-500 active:scale-95 transform hover:scale-105`;
+    } else if (recordingState === 'stopped') {
+      return `${baseStyles} bg-gradient-to-br from-orange-500 to-orange-600 hover:from-orange-400 hover:to-orange-500 active:scale-95 transform hover:scale-105`;
     } else if (recordingState === 'recording') {
       return `${baseStyles} bg-gradient-to-br from-purple-500 to-purple-600 cursor-not-allowed`;
     }
@@ -50,7 +62,8 @@ const RecordingControls: React.FC<RecordingControlsProps> = ({
 
   const getMainButtonIcon = () => {
     if (recordingState === 'idle') {
-      return <Mic className="w-8 h-8 text-white" />;
+      // ✅ MODIFICAR: Cambiar color del icono cuando está disabled
+      return <Mic className={`w-8 h-8 ${disabled ? 'text-gray-500' : 'text-white'}`} />;
     } else if (recordingState === 'stopped') {
       return <RotateCcw className="w-8 h-8 text-white" />;
     } else {
@@ -101,7 +114,9 @@ const RecordingControls: React.FC<RecordingControlsProps> = ({
             className={getMainButtonStyles()}
             title={
               recordingState === 'idle' 
-                ? 'Iniciar grabación' 
+                ? disabled 
+                  ? 'Acepta los términos para grabar'  // ✅ NUEVO: Tooltip cuando está disabled
+                  : 'Iniciar grabación'
                 : recordingState === 'stopped' 
                 ? 'Nueva grabación' 
                 : 'Grabando...'
@@ -116,6 +131,8 @@ const RecordingControls: React.FC<RecordingControlsProps> = ({
               {formatDuration(duration)}
             </div>
           )}
+          
+          
         </div>
 
         {/* Right Button: Stop */}

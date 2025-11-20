@@ -3,6 +3,7 @@ import { InfoIcon, Smartphone, X } from 'lucide-react';
 import AudioVisualizer from './AudioVisualizer';
 import RecordingControls from './RecordingControls';
 import UploadProgress from './UploadProgress';
+import TermsCheckbox from './TermsCheckbox';
 
 
 const AudioRecorder = () => {
@@ -28,6 +29,7 @@ const AudioRecorder = () => {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [uploadResult, setUploadResult] = useState(null);
 
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   // Detectar si estamos en el cliente
   useEffect(() => {
@@ -263,6 +265,12 @@ const AudioRecorder = () => {
 
   const startRecording = async () => {
     if (!isClient) return;
+
+    if (!termsAccepted) {
+    setError('Debes aceptar los términos y condiciones para continuar');
+    addLog('warning', 'Intento de grabar sin aceptar términos');
+    return;
+  }
     
     try {
       setError(null);
@@ -902,7 +910,21 @@ return (
           isPaused={recordingState === 'paused'}
         />
       </div>
+
+      {/* Checkbox de términos */}
+      <div className="text-center space-y-2 max-w-xs px-2 mb-3">
+        {recordingState === 'idle' && (
+          <div className="space-y-3">
+            <TermsCheckbox 
+              checked={termsAccepted}       
+              onChange={setTermsAccepted}
+            />
+          </div>
+        )}
+      </div>
     </div>
+
+    
 
     {/* Bottom Controls - Compacto para iOS */}
     <div className="pb-safe pb-4 flex-shrink-0">
@@ -914,6 +936,7 @@ return (
         onResumeRecording={resumeRecording}
         onStopRecording={stopRecording}
         onResetRecorder={resetRecorder}
+        disabled={!termsAccepted} 
       />
     </div>
 
