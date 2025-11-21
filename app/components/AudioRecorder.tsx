@@ -859,32 +859,25 @@ return (
       )}
 
         {recordingState === 'stopped' && (
-          <div className="space-y-3">
-            <div className="space-y-2">
-              <h2 className="text-lg font-bold text-gray-800">¡Completado!</h2>
-              <p className="text-gray-600 text-sm">
-                Tu audio está listo.
-              </p>
-            </div>
-            <div className="flex justify-center space-x-2">
-              <button
-                onClick={() => {
+          <div className="flex flex-col space-y-2 mt-8">
+            <button
+              onClick={() => {
                   if (audioUrl) {
                     const audio = new Audio(audioUrl);
                     audio.play();
                   }
                 }}
-                className="bg-white/90 border border-gray-200 hover:bg-white text-gray-700 px-4 py-2 rounded-xl transition-all duration-300 hover:shadow-md font-medium text-xs"
+                className="w-full bg-white/90 border border-gray-200 hover:bg-white text-gray-700 px-4 py-2 rounded-xl transition-all duration-300 hover:shadow-md font-medium text-md"
               >
                 ▶️ Reproducir
-              </button>
-              <button
-                onClick={uploadAudio}
-                className="bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-400 hover:to-purple-500 text-white px-4 py-2 rounded-xl transition-all duration-300 hover:shadow-md font-medium text-xs"
-              >
-                📤 Procesar
-              </button>
-            </div>
+            </button>
+
+            <button
+              onClick={uploadAudio}
+              className="w-full bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-400 hover:to-purple-500 text-white px-4 py-2 mt-2 rounded-xl transition-all duration-300 hover:shadow-md font-medium text-md"
+            >
+              📤 Enviar Audio
+            </button>
           </div>
         )}
 
